@@ -1,4 +1,5 @@
 git+https://github.com/huggingface/transformers
+datasets
 tqdm
 mup
 pandas
