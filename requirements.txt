@@ -1,12 +1,3 @@
-git+https://github.com/huggingface/transformers
-sentencepiece
-datasets
-tqdm
-mup
-pandas
-torch
-scikit-learn
-wandb
-kaggle
-tiktoken
-protobuf
+torch==2.2.1
+transformers==4.40.0.dev0
+datasets==2.18.0
