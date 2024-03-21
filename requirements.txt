@@ -37,7 +37,7 @@ jsonschema-specifications==2023.7.1+computecanada
 kiwisolver
 Markdown==3.4.3+computecanada
 MarkupSafe==2.1.2+computecanada
-matplotlib==3.7.0+computecanada
+matplotlib
 mccabe==0.7.0
 # mypy==0.812
 mypy
