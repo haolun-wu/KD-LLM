@@ -2,6 +2,7 @@ from datasets import load_dataset
 import torch
 from torch.utils.data import Dataset
 
+
 class SNLI_Dataset(Dataset):
     def __init__(self, data):
         self.data = data
@@ -16,6 +17,7 @@ class SNLI_Dataset(Dataset):
         label = item['label']
         return premise, hypothesis, label
 
+
 def get_snli_data():
     dataset = load_dataset("snli")
     train_dataset = SNLI_Dataset(dataset['train'])
@@ -25,6 +27,7 @@ def get_snli_data():
     print("len val_dataset:", len(val_dataset))
     print("len test_dataset:", len(test_dataset))
     return train_dataset, val_dataset, test_dataset
+
 
 if __name__ == "__main__":
     get_snli_data()
