@@ -6,6 +6,7 @@ import configs
 from datasets import load_dataset
 import transformers
 from torch import bfloat16
+import requests
 
 # Argument parser setup
 parser = argparse.ArgumentParser(description="Run NLI predictions")
@@ -30,10 +31,16 @@ bnb_config = transformers.BitsAndBytesConfig(
 
 # Load the model and tokenizer
 # model_name = "meta-llama/Llama-2-7b-chat-hf"
-model_name = "mosaicml/mpt-7b"
+# model_name = "mosaicml/mpt-7b"
+# model_name = "mistralai/Mistral-7B-Instruct-v0.2"
+# model_name = "google/gemma-7b-it"
+model_name = "microsoft/phi-2"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config)  # quantized model
+# model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16).to(device)
 
+
+# model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
 
 def load_validation_data(filepath):
     with open(filepath, 'r') as file:
@@ -44,11 +51,11 @@ def load_validation_data(filepath):
 def generate_prompts(data_batch):
     prompts = []
     for premise, hypothesis in zip(data_batch['premise'], data_batch['hypothesis']):
-        prompts.append(
-            "You will be tested on the SNLI data. You should predict whether a premise entails a hypothesis or not, "
-            "and you need to output from 0, 1, 2 three options. Namely, you are given pairs of premise and hypothesis. "
-            "You should output 0 if the hypothesis can be entailed by the premise. You should output 1, if it is "
-            "neutral. You should output 2, if it is contradiction.")
+        # prompts.append(
+        #     "You will be tested on the SNLI data. You should predict whether a premise entails a hypothesis or not, "
+        #     "and you need to output from 0, 1, 2 three options. Namely, you are given pairs of premise and hypothesis. "
+        #     "You should output 0 if the hypothesis can be entailed by the premise. You should output 1, if it is "
+        #     "neutral. You should output 2, if it is contradiction.")
         prompts.append(
             f"Given the premise: '{premise}' and the hypothesis: '{hypothesis}', please first provide a one sentence "
             f"explanation on your thoughts for whether the hypothesis can be entailed by the premise, or neutral, "
@@ -58,19 +65,25 @@ def generate_prompts(data_batch):
     return prompts
 
 
-def parse_responses(outputs):
+def parse_responses_llama2(outputs):
     rationales = []
     predictions = []
     for output in outputs:
         response = output
-        print("Response:", response)
+        # print("Response:", response)
         # Assuming the model's response includes the terms 'Entailment', 'Neutral', or 'Contradiction'
         # Adjust based on your actual model output
         parts = response.split('\n')
-        if len(parts) < 2:
-            rationale = parts[0]
+        if len(parts) > 2 and parts[1] == '':
+            rationale = parts[2]
+        elif len(parts) > 1 and parts[1] != '':
+            rationale = parts[1]
         else:
-            rationale = parts[1] if parts else "No rationale provided."
+            if len(response.split("My rationale is: ")) > 2:
+                rationale = rationale.split("My rationale is: ")[2]
+            else:
+                print("parts:", parts)
+                rationale = "No rationale provided."
         rationales.append(rationale)
 
         # Determine the prediction based on the presence of keywords in the response
@@ -84,6 +97,76 @@ def parse_responses(outputs):
             predictions.append('unknown')  # In case none of the keywords are found
 
     return rationales, predictions
+
+
+def parse_responses_mistral7b(outputs):
+    rationales = []
+    predictions = []
+    for output in outputs:
+        response = output
+        # print("Response:", response)
+        # Assuming the model's response includes the terms 'Entailment', 'Neutral', or 'Contradiction'
+        # Adjust based on your actual model output
+        parts = response.split('\n')
+        # print("parts:", parts)
+        if len(parts) == 4:
+            rationale = parts[2] + parts[3]
+        elif len(parts) == 3:
+            rationale = parts[2]
+        elif len(response.split("My rationale is: ")) == 3:
+            rationale = response.split("My rationale is: ")[2]
+        else:
+            print("parts:", parts)
+            rationale = "No rationale provided."
+        rationales.append(rationale)
+
+        # Determine the prediction based on the presence of keywords in the response
+        if 'Entailment'.lower() in rationale.lower() or "0" in rationale.lower():
+            predictions.append('0')  # 0 for Entailment
+        elif 'Neutral'.lower() in rationale.lower().split("My prediction is: ") or "1" in rationale.lower():
+            predictions.append('1')  # 1 for Neutral
+        elif 'Contradiction'.lower() in rationale.lower().split("My prediction is: ") or "2" in rationale.lower():
+            predictions.append('2')  # 2 for Contradiction
+        else:
+            predictions.append('unknown')  # In case none of the keywords are found
+
+    return rationales, predictions
+
+
+def parse_responses_phi2(outputs):
+    rationales = []
+    predictions = []
+    for output in outputs:
+        response = output
+        parts = response.split('##OUTPUT')
+        # print("parts:", parts)
+        if len(parts) == 2:
+            rationale = parts[1]
+        elif len(response.split("My rationale is: ")) == 2:
+            rationale = response.split("My rationale is: ")[1]
+        else:
+            print("parts:", parts)
+            rationale = "No rationale provided."
+        rationales.append(rationale)
+
+        # Determine the prediction based on the presence of keywords in the response
+        if 'Entailment'.lower() in rationale.lower() or "0" in rationale.lower():
+            predictions.append('0')  # 0 for Entailment
+        elif 'Neutral'.lower() in rationale.lower().split("My prediction is: ") or "1" in rationale.lower():
+            predictions.append('1')  # 1 for Neutral
+        elif 'Contradiction'.lower() in rationale.lower().split("My prediction is: ") or "2" in rationale.lower():
+            predictions.append('2')  # 2 for Contradiction
+        else:
+            predictions.append('unknown')  # In case none of the keywords are found
+
+    return rationales, predictions
+
+
+def query_mistral7b(payload):
+    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+    headers = {"Authorization": "Bearer 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"}
+    response = requests.post(API_URL, headers=headers, json=payload)
+    return response.json()
 
 
 def main():
@@ -103,30 +186,39 @@ def main():
         }
         prompts = generate_prompts(batch)
         # print(f"Batch {i // batch_size + 1} prompts: {prompts}")
-        prompts = prompts[0] + prompts[1]
+        # prompts = prompts[0] + prompts[1]
+        # prompts = "Hello"
+        prompts = prompts[0]
+        print(prompts)
         # Encode the input prompt
-        input_ids = tokenizer(prompts, return_tensors="pt").input_ids.to(device)
-        attention_mask = tokenizer(prompts, return_tensors="pt").attention_mask.to(device)
+        # input_ids = tokenizer(prompts, return_tensors="pt").input_ids.to(device)
+        input_ids = tokenizer(prompts, return_tensors="pt").to(device)
+        # attention_mask = tokenizer(prompts, return_tensors="pt").attention_mask.to(device)
 
         # Generate output using the model
         outputs = model.generate(
-            input_ids,
-            do_sample=True,
-            top_k=10,
-            num_return_sequences=1,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.pad_token_id,
-            attention_mask=attention_mask,
-            max_length=512,
+            **input_ids,
+            # do_sample=True,
+            # top_k=10,
+            # num_return_sequences=1,
+            # eos_token_id=tokenizer.eos_token_id,
+            # pad_token_id=tokenizer.pad_token_id,
+            # attention_mask=attention_mask,
+            max_new_tokens=512,
         )
 
         # Decode the generated output
         outputs = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        if len(outputs.split('\n')) < 2:
-            continue
+        # print(query_mistral7b({"inputs": prompts}))
+        # outputs = query_mistral7b({"inputs": prompts})[0]["generated_text"]
+        # if len(outputs.split('\n')) != 4:
+        #     continue
         # print(f"Batch {i // batch_size + 1} outputs: {outputs}")
-        rationales, predictions = parse_responses([outputs])
-
+        # rationales, predictions = parse_responses_mistral7b([outputs])
+        # rationales, predictions = parse_responses_llama2([outputs])
+        rationales, predictions = parse_responses_phi2([outputs])
+        # print(rationales, predictions)
+        # exit(0)
         for premise, hypothesis, rationale, prediction, label in zip(batch['premise'], batch['hypothesis'], rationales,
                                                                      predictions,
                                                                      validation_data['label'][i:i + batch_size]):
@@ -143,8 +235,8 @@ def main():
                 'prediction': prediction,
                 'label': label
             }
-        break
-    with open(f'result_MPT-7B.json', 'w') as file:
+        # break
+    with open(f'result_phi2.json', 'w') as file:
         json.dump(result, file, indent=4)
 
 
@@ -155,3 +247,4 @@ if __name__ == "__main__":
     # new_data = {"train": {}, "validation": validation, "test": {}}
     # with open("validation_1000.json", "w") as f:
     #     json.dump(new_data, f, indent=4)
+    # pip install bitsandbytes accelerate
