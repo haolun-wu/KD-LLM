@@ -9,8 +9,6 @@ scikit-learn
 scipy
 sentencepiece
 tensorboard
-tensorboard-data-server
-threadpoolctl
 tokenizers
 torch
 tqdm
