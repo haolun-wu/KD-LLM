@@ -81,13 +81,14 @@ def main():
         for i in range(0, len(train_data['premise']), args.batch_size):
             batch = {
                 'premise': train_data['premise'][i:i + args.batch_size],
-                'hypothesis': train_data['hypothesis'][i:i + args.batch_size]
+                'hypothesis': train_data['hypothesis'][i:i + args.batch_size],
+                'label': train_data['label'][i:i + args.batch_size]
             }
             prompts = generate_prompts(batch)
             outputs = [generator(prompt, max_length=200, num_return_sequences=1)[0] for prompt in prompts]
             rationales, predictions = parse_responses(outputs)
             int_predictions = [int(pred) for pred in predictions]
-            loss = F.cross_entropy(torch.sensor(int_predictions), batch["labels"])
+            loss = F.cross_entropy(torch.tensor(int_predictions), batch['label'])
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
