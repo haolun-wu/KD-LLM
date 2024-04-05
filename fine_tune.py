@@ -1,6 +1,6 @@
 from datasets import load_dataset
-from mytrainer import MyTrainer
-from mytrainer import training_args
+# from mytrainer import MyTrainer
+# from mytrainer import training_args
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import configs
 import argparse
@@ -88,6 +88,8 @@ def main():
             outputs = [generator(prompt, max_length=200, num_return_sequences=1)[0] for prompt in prompts]
             rationales, predictions = parse_responses(outputs)
             int_predictions = [int(pred) for pred in predictions]
+            print("int_predictions:", torch.tensor(int_predictions))
+            print("batch['label']:", batch['label'])
             loss = F.cross_entropy(torch.tensor(int_predictions), batch['label'])
             loss.backward()
             optimizer.step()
