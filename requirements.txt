@@ -1,3 +1,8 @@
+transformers
+sentencepiece
+tensorboard
+tokenizers
+torch
 datasets
 matplotlib
 numpy
@@ -7,12 +12,6 @@ Pillow
 safetensors
 scikit-learn
 scipy
-sentencepiece
-tensorboard
-tokenizers
-torch
 tqdm
-# huggingface transformers installed from github
-git+https://github.com/huggingface/transformers
 wandb
 # xformers
