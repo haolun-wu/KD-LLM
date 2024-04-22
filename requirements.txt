@@ -8,7 +8,6 @@ matplotlib
 numpy
 pandas
 peft
-Pillow
 safetensors
 scikit-learn
 scipy
