@@ -13,4 +13,6 @@ scikit-learn
 scipy
 tqdm
 wandb
+bitsandbytes
+accelerate
 # xformers
