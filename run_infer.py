@@ -31,7 +31,7 @@ bnb_config = transformers.BitsAndBytesConfig(
 
 # Load the pretrained model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-if 'cuda' in device:
+if devic == 'cuda':
     model = AutoModelForCausalLM.from_pretrained(args.model_name, quantization_config=bnb_config)  # quantized model
 else:
     model = AutoModelForCausalLM.from_pretrained(args.model_name)
@@ -73,7 +73,7 @@ def parse_responses_GPT2(outputs):
     predictions = []
     for output in outputs:
         # response = output['generated_text']
-        response=output
+        response = output
         # Assuming the model's response includes the terms 'Entailment', 'Neutral', or 'Contradiction'
         # Adjust based on your actual model output
         parts = response.split('\n')
@@ -91,6 +91,7 @@ def parse_responses_GPT2(outputs):
             predictions.append('unknown')  # In case none of the keywords are found
 
     return rationales, predictions
+
 
 def parse_responses_phi2(outputs):
     rationales = []
