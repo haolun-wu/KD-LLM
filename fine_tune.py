@@ -1,6 +1,4 @@
 from datasets import load_dataset
-# from mytrainer import MyTrainer
-# from mytrainer import training_args
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import configs
 import argparse
@@ -8,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW
 import torch.nn.functional as F
-
+from utils import generate_prompts, parse_responses
 
 # Argument parser setup
 parser = argparse.ArgumentParser(description="Run NLI predictions")
@@ -23,57 +21,23 @@ parser.add_argument("--max_epoch", default=configs.DEFAULT_TRAINING_EPOCH, type=
 args = parser.parse_args()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 # Load the pretrained model, tokenizer, and optimizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name)
 model = AutoModelForCausalLM.from_pretrained(args.model_name)
 optimizer = AdamW(model.parameters(), lr=args.lr)
-generator = pipeline('text-generation', model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1,
-                     max_length=args.max_length, num_beams=args.num_beams)
-
-
-def preprocess_function(examples):
-    # Tokenize the premises and hypotheses
-    return tokenizer(examples['premise'], examples['hypothesis'], truncation=True, padding=True)
-
-def generate_prompts(data_batch):
-    prompts = []
-    for premise, hypothesis in zip(data_batch['premise'], data_batch['hypothesis']):
-        prompts.append(
-            "You will be tested on the SNLI data. You should predict whether a premise entails a hypothesis or not, and you need to output from 0, 1, 2 three options. Namely, you are given pairs of premise and hypothesis. You should output 0 if the hypothesis can be entailed by the premise. You should output 1, if it is neutral. You should output 2, if it is contradiction.")
-        prompts.append(
-            f"Given the premise: '{premise}' and the hypothesis: '{hypothesis}', please first provide a one sentence explanation on your thoughts for whether the hypothesis can be entailed by the premise, or neutral, or contradiction. Then, output '0' if the hypothesis can be entailed by the premise, '1' if it is neutral, otherwise output '2' if there is contradiction.")
-    return prompts
-
-def parse_responses(outputs):
-    rationales = []
-    predictions = []
-    for output in outputs:
-        response = output['generated_text']
-        # Assuming the model's response includes the terms 'Entailment', 'Neutral', or 'Contradiction'
-        # Adjust based on your actual model output
-        parts = response.split('\n')
-        rationale = parts[0] if parts else "No rationale provided."
-        rationales.append(rationale)
-
-        # Determine the prediction based on the presence of keywords in the response
-        if 'Entailment' in response:
-            predictions.append('0')  # 0 for Entailment
-        elif 'Neutral' in response:
-            predictions.append('1')  # 1 for Neutral
-        elif 'Contradiction' in response:
-            predictions.append('2')  # 2 for Contradiction
-        else:
-            predictions.append('unknown')  # In case none of the keywords are found
-
-    return rationales, predictions
+generator = pipeline('text-generation',
+                     model=model,
+                     tokenizer=tokenizer,
+                     device=device,
+                     max_length=args.max_length,
+                     num_beams=args.num_beams)
 
 
 def main():
     snli_data = load_dataset("snli")
     # tokenized_data = snli_data.map(preprocess_function, batched=True)
-    train_data = snli_data['training'][:2000]
-    validate_data = snli_data['validation'][:1000]
+    train_data = snli_data['train'][:10]
+    validate_data = snli_data['validation'][:10]
 
     # fine-tuning
     model.train()
@@ -87,10 +51,13 @@ def main():
             prompts = generate_prompts(batch)
             outputs = [generator(prompt, max_length=200, num_return_sequences=1)[0] for prompt in prompts]
             rationales, predictions = parse_responses(outputs)
+            print("rationales:", rationales)
+            print("predictions:", predictions)
             int_predictions = [int(pred) for pred in predictions]
             print("int_predictions:", torch.tensor(int_predictions))
             print("batch['label']:", batch['label'])
             loss = F.cross_entropy(torch.tensor(int_predictions), batch['label'])
+            print("loss:", loss)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -115,9 +82,6 @@ def main():
                 print(f"Rationale: {rationale}")
                 print(f"Prediction (0 for Entailment, 1 for Neutral, 2 for Contradiction): {prediction}")
                 print(f"Ground Truth: {label}")
-
-
-
 
     # trainer = MyTrainer(
     #     model=model,  # Your pre-trained model
