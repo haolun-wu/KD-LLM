@@ -31,7 +31,7 @@ bnb_config = transformers.BitsAndBytesConfig(
 
 # Load the pretrained model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-if devic == 'cuda':
+if device == 'cuda':
     model = AutoModelForCausalLM.from_pretrained(args.model_name, quantization_config=bnb_config)  # quantized model
 else:
     model = AutoModelForCausalLM.from_pretrained(args.model_name)
