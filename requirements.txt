@@ -1,14 +1,11 @@
-transformers
 sentencepiece
-tensorboard
 tokenizers
+transformers
 torch
 datasets
 matplotlib
 numpy
 pandas
-peft
-safetensors
 scikit-learn
 scipy
 tqdm
