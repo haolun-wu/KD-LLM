@@ -35,8 +35,8 @@ if device == 'cuda':
     model = AutoModelForCausalLM.from_pretrained(args.model_name, quantization_config=bnb_config)  # quantized model
 else:
     model = AutoModelForCausalLM.from_pretrained(args.model_name)
-generator = pipeline('text-generation', model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1,
-                     max_length=args.max_length, num_beams=args.num_beams)
+# generator = pipeline('text-generation', model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1,
+#                      max_length=args.max_length, num_beams=args.num_beams)
 
 
 def load_validation_data(filepath):
@@ -59,43 +59,12 @@ def generate_prompts(data_batch):
             f"or contradiction. Then, output '0' if the hypothesis can be entailed by the premise, '1' if it is "
             f"neutral, otherwise output '2' if there is contradiction. Your output should use the template "
             f"'My rationale is: ... and my prediction is: 0/1/2.' in one sentence.")
-        # prompts.append(
-        #     "Premise: " + premise + " Hypothesis: " + hypothesis + " My rationale in one sentence: "
-        # )
-        # prompts.append(
-        #     "Premise: " + premise + " Hypothesis: " + hypothesis + " My prediction is (Entailment, Neutral, Contradiction):"
-        # )
     return prompts
-
-
-def parse_responses_GPT2(outputs):
-    rationales = []
-    predictions = []
-    for output in outputs:
-        # response = output['generated_text']
-        response = output
-        # Assuming the model's response includes the terms 'Entailment', 'Neutral', or 'Contradiction'
-        # Adjust based on your actual model output
-        parts = response.split('\n')
-        rationale = parts[0] if parts else "No rationale provided."
-        rationales.append(rationale)
-
-        # Determine the prediction based on the presence of keywords in the response
-        if 'Entailment' in response:
-            predictions.append('0')  # 0 for Entailment
-        elif 'Neutral' in response:
-            predictions.append('1')  # 1 for Neutral
-        elif 'Contradiction' in response:
-            predictions.append('2')  # 2 for Contradiction
-        else:
-            predictions.append('unknown')  # In case none of the keywords are found
-
-    return rationales, predictions
-
 
 def parse_responses_phi2(outputs):
     rationales = []
     predictions = []
+    outputs = [outputs]
     for output in outputs:
         response = output
         parts = response.split('##OUTPUT')
@@ -137,7 +106,7 @@ def main():
         prompts = prompts[0] + prompts[1]
         print("prompts:", prompts)
         # outputs = [generator(prompt, max_length=200, num_return_sequences=1)[0] for prompt in prompts]
-        encoded_outputs = tokenizer(prompts, return_tensors="pt", max_length=1024, truncation=True).to(device)
+        encoded_outputs = tokenizer(prompts, return_tensors="pt").to(device)
         input_ids = encoded_outputs.input_ids
         attention_mask = encoded_outputs.attention_mask
         print("input_ids:", input_ids.shape)
@@ -149,7 +118,7 @@ def main():
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.pad_token_id,
             attention_mask=attention_mask,
-            max_new_tokens=50,
+            max_new_tokens=1000,
         )
         print("outputs:", outputs.shape)
 
